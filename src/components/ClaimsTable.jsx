@@ -89,7 +89,7 @@ const ClaimsTable = ({ claims }) => {
               <thead className="bg-white/5">
                 <tr>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-purple-300">
-                    Numéro
+                    Num Sinistre
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-purple-300">
                     Bénéficiaire
@@ -189,7 +189,7 @@ const ClaimsTable = ({ claims }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-white">
               <div>
-                <span className="text-purple-300">Numéro:</span>{" "}
+                <span className="text-purple-300">Num Sinistre:</span>{" "}
                 {selectedClaim.claimNumber}
               </div>
               <div>
