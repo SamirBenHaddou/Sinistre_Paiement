@@ -11,6 +11,7 @@ const OcrProcessor = ({ claims, onIbanExtracted, onRemoveClaim }) => {
   const [ocrResult, setOcrResult] = useState(null);
   const { toast } = useToast();
   const OCR_API_KEY = "K88328201688957";
+  const fileInputRef = React.useRef(null);
 
   const extractIbanAndBic = (text) => {
     const ibanRegex =
@@ -266,23 +267,71 @@ const OcrProcessor = ({ claims, onIbanExtracted, onRemoveClaim }) => {
     }
   };
 
-  const handleDrop = useCallback((event) => {
+  const handleDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsDragging(false);
+
+      try {
+        // Méthode 1: Fichiers standards (fonctionne sur toutes versions)
+        if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+          const file = event.dataTransfer.files[0];
+          processFile(file);
+          return;
+        }
+
+        // Méthode 2: Items API (plus moderne, pour compatibilité étendue)
+        if (event.dataTransfer.items && event.dataTransfer.items.length > 0) {
+          const item = event.dataTransfer.items[0];
+          if (item.kind === "file") {
+            const file = item.getAsFile();
+            if (file) {
+              processFile(file);
+              return;
+            }
+          }
+        }
+
+        // Si aucune méthode ne fonctionne
+        toast({
+          title: "Drag & Drop non compatible",
+          description:
+            "Utilisez le bouton de sélection de fichier comme alternative.",
+          variant: "destructive",
+        });
+      } catch (error) {
+        toast({
+          title: "Erreur technique",
+          description:
+            "Impossible de récupérer le fichier. Utilisez le bouton de sélection.",
+          variant: "destructive",
+        });
+      }
+    },
+    [processFile, toast]
+  );
+
+  const handleDragOver = useCallback((event) => {
     event.preventDefault();
     event.stopPropagation();
-    setIsDragging(false);
-    if (event.dataTransfer.files[0]) processFile(event.dataTransfer.files[0]);
+    // Définir l'effet de drop pour améliorer la compatibilité
+    event.dataTransfer.dropEffect = "copy";
   }, []);
-
-  const handleDragOver = useCallback((event) => event.preventDefault(), []);
 
   const handleDragEnter = useCallback((event) => {
     event.preventDefault();
+    event.stopPropagation();
     setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((event) => {
     event.preventDefault();
-    setIsDragging(false);
+    event.stopPropagation();
+    // Vérifier si on quitte vraiment la zone (pas un enfant)
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setIsDragging(false);
+    }
   }, []);
 
   const handleAssociate = (claimId) => {
@@ -345,12 +394,24 @@ const OcrProcessor = ({ claims, onIbanExtracted, onRemoveClaim }) => {
             onDragOver={handleDragOver}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
+            onClick={() => fileInputRef.current?.click()}
             className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
               isDragging
                 ? "border-purple-500 bg-purple-500/10"
                 : "border-white/20 hover:border-white/40"
             }`}
           >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  processFile(e.target.files[0]);
+                }
+              }}
+              className="hidden"
+            />
             <Upload
               className={`w-10 h-10 mb-3 transition-transform ${
                 isDragging ? "scale-110 text-purple-400" : "text-purple-300"
@@ -364,8 +425,11 @@ const OcrProcessor = ({ claims, onIbanExtracted, onRemoveClaim }) => {
               <span className="font-semibold">Glissez-déposez</span> un fichier
               ici
             </p>
-            <p className="text-xs text-purple-400">
+            <p className="text-xs text-purple-400 mb-2">
               PDF, JPG, PNG - Extraction du contenu réel des PDFs avec PDF.js
+            </p>
+            <p className="text-xs text-blue-300 font-semibold">
+              ou cliquez pour sélectionner un fichier
             </p>
           </div>
           {isProcessing && (
