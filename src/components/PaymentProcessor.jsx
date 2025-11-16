@@ -11,6 +11,12 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import ManualPaymentForm from "@/components/ManualPaymentForm";
 import * as XLSX from "xlsx";
+import {
+  isValidIBAN,
+  isValidBIC,
+  getIBANErrorMessage,
+  getBICErrorMessage,
+} from "@/lib/validation";
 const PaymentProcessor = ({
   claims,
   onUpdate,
@@ -21,11 +27,70 @@ const PaymentProcessor = ({
   const [paymentList, setPaymentList] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isManualFormOpen, setIsManualFormOpen] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({}); // Suivi des erreurs de validation
   const { toast } = useToast();
   useEffect(() => {
     setPaymentList(claims);
   }, [claims]);
   const handleInputChange = (id, field, value) => {
+    const errorKey = `${id}-${field}`;
+
+    // Validation IBAN
+    if (field === "iban" && value) {
+      const error = getIBANErrorMessage(value);
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        if (error) {
+          newErrors[errorKey] = error;
+        } else {
+          delete newErrors[errorKey];
+        }
+        return newErrors;
+      });
+
+      if (error) {
+        toast({
+          title: "IBAN invalide",
+          description: error,
+          variant: "destructive",
+        });
+      }
+    } else if (field === "iban" && !value) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[errorKey];
+        return newErrors;
+      });
+    }
+
+    // Validation BIC
+    if (field === "bic" && value) {
+      const error = getBICErrorMessage(value);
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        if (error) {
+          newErrors[errorKey] = error;
+        } else {
+          delete newErrors[errorKey];
+        }
+        return newErrors;
+      });
+
+      if (error) {
+        toast({
+          title: "Code BIC invalide",
+          description: error,
+          variant: "destructive",
+        });
+      }
+    } else if (field === "bic" && !value) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[errorKey];
+        return newErrors;
+      });
+    }
+
     const newList = paymentList.map((item) =>
       item.id === id
         ? {
@@ -323,7 +388,16 @@ const PaymentProcessor = ({
                         onChange={(e) =>
                           handleInputChange(p.id, "iban", e.target.value)
                         }
-                        className="bg-transparent w-full focus:ring-purple-500 focus:border-purple-500 border-0 border-b-2 border-transparent focus:border-purple-400"
+                        className={`bg-transparent w-full focus:ring-purple-500 focus:border-purple-500 border-0 border-b-2 border-transparent focus:border-purple-400 ${
+                          validationErrors[`${p.id}-iban`]
+                            ? "bg-orange-500/20 border-b-2 border-orange-500"
+                            : ""
+                        }`}
+                        title={
+                          validationErrors[`${p.id}-iban`]
+                            ? validationErrors[`${p.id}-iban`]
+                            : ""
+                        }
                       />
                     </td>
                     <td className="px-4 py-2">
