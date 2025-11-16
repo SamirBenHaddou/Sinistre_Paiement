@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import ManualPaymentForm from "@/components/ManualPaymentForm";
+import * as XLSX from "xlsx";
 const PaymentProcessor = ({
   claims,
   onUpdate,
@@ -42,7 +43,7 @@ const PaymentProcessor = ({
       description: "Les informations de paiement ont été mises à jour.",
     });
   };
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     const listToExport = paymentList.filter((p) => selectedIds.has(p.id));
     if (listToExport.length === 0) {
       toast({
@@ -61,32 +62,42 @@ const PaymentProcessor = ({
       "Libellé",
       "Gestionnaire",
     ];
-    const rows = listToExport.map((p) =>
-      [
-        p.beneficiary,
-        p.iban || "",
-        p.bic || "",
-        p.amount,
-        p.claimNumber,
-        p.label || "",
-        p.manager,
-      ].join(",")
+    const rows = listToExport.map((p) => [
+      p.beneficiary,
+      p.iban || "",
+      p.bic || "",
+      p.amount,
+      p.claimNumber,
+      p.label || "",
+      p.manager,
+    ]);
+
+    // Créer un classeur Excel
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+    // Ajuster la largeur des colonnes
+    ws["!cols"] = [
+      { wch: 25 }, // Bénéficiaire
+      { wch: 27 }, // IBAN
+      { wch: 12 }, // BIC
+      { wch: 12 }, // Montant
+      { wch: 15 }, // Num Sinistre
+      { wch: 25 }, // Libellé
+      { wch: 20 }, // Gestionnaire
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Paiements");
+
+    // Télécharger le fichier
+    XLSX.writeFile(
+      wb,
+      `paiements_${new Date().toISOString().split("T")[0]}.xlsx`
     );
-    const csvContent =
-      "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute(
-      "download",
-      `paiements_${new Date().toISOString().split("T")[0]}.csv`
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
     toast({
       title: "Exportation réussie",
-      description: `${listToExport.length} lignes exportées.`,
+      description: `${listToExport.length} lignes exportées en Excel.`,
     });
   };
   const handleMarkAsPaid = () => {
@@ -209,11 +220,11 @@ const PaymentProcessor = ({
                 <PlusCircle className="mr-2 h-4 w-4" /> Ajouter Manuel
               </Button>
               <Button
-                onClick={handleExportCSV}
+                onClick={handleExportExcel}
                 variant="outline"
                 className="border-blue-500/50 text-blue-300 hover:bg-blue-500/20"
               >
-                <Download className="mr-2 h-4 w-4" /> Exporter CSV
+                <Download className="mr-2 h-4 w-4" /> Exporter Excel
               </Button>
               <Button onClick={onReset} variant="destructive">
                 <Trash2 className="mr-2 h-4 w-4" /> Tout Réinitialiser

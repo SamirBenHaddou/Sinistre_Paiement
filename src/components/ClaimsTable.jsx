@@ -7,11 +7,90 @@ import {
   Clock,
   XCircle,
   CreditCard,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import * as XLSX from "xlsx";
 
 const ClaimsTable = ({ claims }) => {
   const [selectedClaim, setSelectedClaim] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  const handleExportExcel = () => {
+    // Si aucune sélection, exporter tous les sinistres
+    const claimsToExport =
+      selectedIds.size > 0
+        ? claims.filter((c) => selectedIds.has(c.id))
+        : claims;
+
+    if (claimsToExport.length === 0) {
+      return;
+    }
+
+    const headers = [
+      "NOM BENEFICIAIRE",
+      "IBAN",
+      "BIC",
+      "Montant",
+      "Num Sinistre",
+      "Libelle",
+      "Banque",
+      "Gestionnaire",
+    ];
+
+    const rows = claimsToExport.map((c) => [
+      c.beneficiary,
+      c.iban || "",
+      c.bic || "",
+      c.amount,
+      c.claimNumber,
+      c.label || "",
+      c.type || "", // Utiliser "type" pour "Banque"
+      c.manager,
+    ]);
+
+    // Créer un classeur Excel
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+    // Ajuster la largeur des colonnes
+    ws["!cols"] = [
+      { wch: 25 }, // NOM BENEFICIAIRE
+      { wch: 27 }, // IBAN
+      { wch: 12 }, // BIC
+      { wch: 12 }, // Montant
+      { wch: 15 }, // Num Sinistre
+      { wch: 25 }, // Libelle
+      { wch: 20 }, // Banque
+      { wch: 20 }, // Gestionnaire
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Sinistres");
+
+    // Télécharger le fichier
+    XLSX.writeFile(
+      wb,
+      `sinistres_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === claims.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(claims.map((c) => c.id)));
+    }
+  };
+
+  const handleSelect = (id) => {
+    const newSelectedIds = new Set(selectedIds);
+    if (newSelectedIds.has(id)) {
+      newSelectedIds.delete(id);
+    } else {
+      newSelectedIds.add(id);
+    }
+    setSelectedIds(newSelectedIds);
+  };
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -73,6 +152,33 @@ const ClaimsTable = ({ claims }) => {
         transition={{ delay: 0.2 }}
         className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 overflow-hidden"
       >
+        {claims.length > 0 && (
+          <div className="px-6 py-4 bg-white/5 border-b border-white/10 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                onChange={handleSelectAll}
+                checked={
+                  selectedIds.size === claims.length && claims.length > 0
+                }
+                className="form-checkbox h-4 w-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                title="Sélectionner tous les sinistres"
+              />
+              <span className="text-sm text-purple-300">
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} sélectionné(s)`
+                  : "Sélectionner"}
+              </span>
+            </div>
+            <Button
+              onClick={handleExportExcel}
+              variant="outline"
+              className="border-blue-500/50 text-blue-300 hover:bg-blue-500/20"
+            >
+              <Download className="mr-2 h-4 w-4" /> Exporter Excel
+            </Button>
+          </div>
+        )}
         {claims.length === 0 ? (
           <div className="text-center py-12">
             <FileText className="w-16 h-16 text-purple-400 mx-auto mb-4" />
@@ -88,6 +194,16 @@ const ClaimsTable = ({ claims }) => {
             <table className="w-full">
               <thead className="bg-white/5">
                 <tr>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-purple-300 w-12">
+                    <input
+                      type="checkbox"
+                      onChange={handleSelectAll}
+                      checked={
+                        selectedIds.size === claims.length && claims.length > 0
+                      }
+                      className="form-checkbox h-4 w-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                    />
+                  </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-purple-300">
                     Num Sinistre
                   </th>
@@ -115,8 +231,18 @@ const ClaimsTable = ({ claims }) => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="hover:bg-white/5 transition-colors"
+                    className={`hover:bg-white/5 transition-colors ${
+                      selectedIds.has(claim.id) ? "bg-purple-500/20" : ""
+                    }`}
                   >
+                    <td className="px-6 py-4 w-12">
+                      <input
+                        type="checkbox"
+                        onChange={() => handleSelect(claim.id)}
+                        checked={selectedIds.has(claim.id)}
+                        className="form-checkbox h-4 w-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                      />
+                    </td>
                     <td className="px-6 py-4 text-white font-medium">
                       {claim.claimNumber}
                     </td>
