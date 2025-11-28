@@ -21,39 +21,83 @@ const EmailProcessor = ({ onClaimAdded }) => {
 
   const extractClaimInfo = (subject) => {
     const rchIndex = subject.indexOf("RCH");
-    if (rchIndex === -1) {
-      return null;
-    }
+    if (rchIndex === -1) return null;
+
     const relevantSubject = subject.substring(rchIndex);
     const parts = relevantSubject.split(" - ");
-    if (parts.length < 5) {
-      return null;
-    }
+    if (parts.length < 3) return null;
+
     const claimNumber = parts[0].trim();
-    const beneficiary = parts[1].trim();
-    const type = parts[2].trim();
-    const amountPart = parts[4].trim().replace(",", ".");
-    const amount = parseFloat(amountPart);
+
+    // Nom du dossier (généralement deuxième champ)
+    const dossierName = parts[1] ? parts[1].trim() : null;
+
+    // Type (souvent 3e champ) et mode de paiement (souvent 4e)
+    const type = parts[2] ? parts[2].trim() : null;
+    const paymentMode = parts[3] ? parts[3].trim() : null;
+
+    // Montant : chercher une partie composée uniquement de chiffres
+    const amountIdx = parts.findIndex((p) => /^\s*\d+[\.,]?\d*\s*$/.test(p));
+    const amountPart =
+      amountIdx !== -1 ? parts[amountIdx].trim().replace(",", ".") : null;
+    const amount = amountPart ? parseFloat(amountPart) : NaN;
+
+    // Gestionnaire
     const managerMatch = relevantSubject.match(
-      /Gestionnaire\s*:\s*([a-zA-Z\s]+)/i
+      /Gestionnaire\s*:\s*([A-Za-zÀ-ÖØ-öø-ÿ0-9\-\s]+)/i
     );
     const manager = managerMatch ? managerMatch[1].trim() : null;
-    if (
-      claimNumber.startsWith("RCH") &&
-      beneficiary &&
-      type &&
-      !isNaN(amount) &&
-      manager
-    ) {
-      return {
-        claimNumber,
-        beneficiary,
-        type,
-        amount,
-        manager,
-      };
+
+    // Bénéficiaire : privilégier 'Destinataire : X' ou 'Bénéficiaire : X' ailleurs dans le sujet
+    let beneficiary = null;
+    const destMatch = relevantSubject.match(
+      /(?:Destinataire|B[eé]n[eé]ficiaire)\s*:\s*([^\-]+)(?:\-|$)/i
+    );
+    if (destMatch) {
+      beneficiary = destMatch[1].trim();
+    } else {
+      // fallback heuristique : si parts[5] contient Destinataire
+      if (
+        parts[5] &&
+        /(?:Destinataire|B[eé]n[eé]ficiaire)\s*:/i.test(parts[5])
+      ) {
+        const m = parts[5].match(
+          /(?:Destinataire|B[eé]n[eé]ficiaire)\s*:\s*(.+)/i
+        );
+        if (m) beneficiary = m[1].trim();
+      }
+      if (!beneficiary) {
+        // si parts contient un élément en majuscules et chiffres (ex AUDIO 76) on peut le prendre
+        const possible = parts.find((p) => /^[A-Z0-9\s]{2,}$/.test(p.trim()));
+        if (possible && possible !== dossierName) beneficiary = possible.trim();
+      }
+      if (!beneficiary) beneficiary = dossierName;
     }
-    return null;
+
+    console.log("extractClaimInfo parts:", parts);
+    console.log("parsed:", {
+      claimNumber,
+      dossierName,
+      paymentMode,
+      amount,
+      beneficiary,
+      manager,
+      type,
+    });
+
+    // Validation minimale
+    if (!claimNumber.startsWith("RCH")) return null;
+    if (!beneficiary) return null;
+
+    return {
+      claimNumber,
+      dossierName,
+      paymentMode,
+      amount,
+      beneficiary,
+      manager,
+      type,
+    };
   };
 
   const processSubject = useCallback(
@@ -352,6 +396,14 @@ const EmailProcessor = ({ onClaimAdded }) => {
               </div>
               <div>
                 <label className="block text-purple-300 text-sm font-medium mb-1">
+                  Nom Dossier
+                </label>
+                <p className="text-white bg-white/5 px-4 py-2 rounded-lg">
+                  {extractedData.dossierName}
+                </p>
+              </div>
+              <div>
+                <label className="block text-purple-300 text-sm font-medium mb-1">
                   Bénéficiaire
                 </label>
                 <p className="text-white bg-white/5 px-4 py-2 rounded-lg">
@@ -377,6 +429,14 @@ const EmailProcessor = ({ onClaimAdded }) => {
                     style: "currency",
                     currency: "EUR",
                   })}
+                </p>
+              </div>
+              <div>
+                <label className="block text-purple-300 text-sm font-medium mb-1">
+                  Mode de paiement
+                </label>
+                <p className="text-white bg-white/5 px-4 py-2 rounded-lg">
+                  {extractedData.paymentMode}
                 </p>
               </div>
               <div>
