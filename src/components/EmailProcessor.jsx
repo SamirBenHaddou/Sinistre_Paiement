@@ -20,14 +20,36 @@ const EmailProcessor = ({ onClaimAdded }) => {
   const { toast } = useToast();
 
   const extractClaimInfo = (subject) => {
-    const rchIndex = subject.indexOf("RCH");
-    if (rchIndex === -1) return null;
+    // Le numéro de sinistre est désormais tout ce qui précède le premier délimiteur " - "
+    const relevantSubject = subject.trim();
+    const parts = relevantSubject.split(" - ").map((p) => p.trim());
+    if (!relevantSubject || parts.length < 2) return null;
 
-    const relevantSubject = subject.substring(rchIndex);
-    const parts = relevantSubject.split(" - ");
-    if (parts.length < 3) return null;
-
-    const claimNumber = parts[0].trim();
+    // Extraire le numéro de sinistre depuis le premier segment.
+    // Le premier segment peut contenir du texte additionnel (ex. "De Objet Reçu ... PJH202503243").
+    // On recherche donc dans ce segment le dernier token qui ressemble à un code (lettres+chiffres),
+    // sinon on prend le dernier mot du segment.
+    const firstSegment = parts[0] || "";
+    let claimNumber = null;
+    // Cherche un token lettres+chiffres (ex PJH202503243)
+    const codeMatch = firstSegment.match(/([A-Z]{1,6}\d{3,12})/i);
+    if (codeMatch) {
+      // Prendre la dernière occurrence si plusieurs
+      const allMatches = firstSegment.match(/([A-Z]{1,6}\d{3,12})/gi);
+      claimNumber = allMatches
+        ? allMatches[allMatches.length - 1]
+        : codeMatch[1];
+    } else {
+      // fallback : prendre le dernier mot qui contient un chiffre, sinon le dernier mot
+      const tokens = firstSegment.split(/\s+/).filter(Boolean);
+      const withDigits = tokens.filter((t) => /\d/.test(t));
+      claimNumber = withDigits.length
+        ? withDigits[withDigits.length - 1]
+        : tokens.length
+        ? tokens[tokens.length - 1]
+        : null;
+    }
+    if (claimNumber) claimNumber = claimNumber.trim();
 
     // Nom du dossier (généralement deuxième champ)
     const dossierName = parts[1] ? parts[1].trim() : null;
@@ -42,9 +64,9 @@ const EmailProcessor = ({ onClaimAdded }) => {
       amountIdx !== -1 ? parts[amountIdx].trim().replace(",", ".") : null;
     const amount = amountPart ? parseFloat(amountPart) : NaN;
 
-    // Gestionnaire
+    // Gestionnaire : extraire les 2 premiers mots après "Gestionnaire :"
     const managerMatch = relevantSubject.match(
-      /Gestionnaire\s*:\s*([A-Za-zÀ-ÖØ-öø-ÿ0-9\-\s]+)/i
+      /Gestionnaire\s*:\s*([A-Za-zÀ-ÖØ-öø-ÿ0-9\-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ0-9\-]+)?)/i
     );
     const manager = managerMatch ? managerMatch[1].trim() : null;
 
@@ -85,8 +107,14 @@ const EmailProcessor = ({ onClaimAdded }) => {
       type,
     });
 
-    // Validation minimale
-    if (!claimNumber.startsWith("RCH")) return null;
+    // Validation minimale : le numéro de sinistre est tout ce qui précède le premier '-'
+    if (!claimNumber || claimNumber.length === 0) {
+      console.log(
+        "extractClaimInfo: numéro de sinistre manquant:",
+        claimNumber
+      );
+      return null;
+    }
     if (!beneficiary) return null;
 
     return {
@@ -124,7 +152,7 @@ const EmailProcessor = ({ onClaimAdded }) => {
           toast({
             title: "Extraction échouée",
             description:
-              "Format non reconnu. Assurez-vous que le texte contient 'RCH...' et 'Gestionnaire : ...' et suit le format attendu.",
+              "Format non reconnu. Assurez-vous que l'objet contient le numéro suivi des champs séparés par ' - ' et 'Gestionnaire : ...'.",
             variant: "destructive",
           });
         }
@@ -480,7 +508,7 @@ const EmailProcessor = ({ onClaimAdded }) => {
               Pour une extraction optimale, le texte doit suivre ce format :
               <br />
               <code className="bg-blue-500/20 px-2 py-1 rounded text-blue-100 mt-1 inline-block text-xs">
-                RCH... - BÉNÉFICIAIRE - Type - Virement - Montant - ... -
+                Numéro... - BÉNÉFICIAIRE - Type - Virement - Montant - ... -
                 Gestionnaire : NOM
               </code>
             </p>
