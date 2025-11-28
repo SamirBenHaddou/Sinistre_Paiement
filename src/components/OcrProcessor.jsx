@@ -174,23 +174,11 @@ const OcrProcessor = ({ claims, onIbanExtracted, onRemoveClaim }) => {
       }
     }
 
-    // Extraction BIC
-    const bicPattern = /\b[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?\b/g;
-    const bicMatches = cleanedForSearch.match(bicPattern);
-    if (bicMatches) {
-      // Filtrer les faux positifs courants
-      const validBics = bicMatches.filter(
-        (b) =>
-          (b.length === 8 || b.length === 11) &&
-          !b.startsWith("RELE") && // évite "RELEVÉ"
-          !b.startsWith("PARISIL") // évite "PARIS ILE"
-      );
-      bic = validBics[0] || null;
-      console.log("BIC détecté:", bic);
-    }
+    // BIC: laissé vide intentionnellement
+    bic = null;
 
     console.log("=== FIN EXTRACTION ===");
-    console.log("Résultat final - IBAN:", iban, "BIC:", bic);
+    console.log("Résultat final - IBAN:", iban);
 
     return { iban, bic, ocrRaw: raw };
   };
@@ -495,17 +483,6 @@ const OcrProcessor = ({ claims, onIbanExtracted, onRemoveClaim }) => {
                 {ocrResult.iban || "Aucun IBAN valide trouvé"}
               </p>
             </div>
-
-            {ocrResult.bic && (
-              <div className="mt-4">
-                <label className="block text-green-300 text-sm font-medium mb-1">
-                  BIC détecté
-                </label>
-                <p className="text-white bg-white/5 px-4 py-2 rounded-lg font-mono text-sm">
-                  {ocrResult.bic}
-                </p>
-              </div>
-            )}
 
             <div className="mt-4">
               <label className="block text-slate-300 text-sm font-medium mb-1">
